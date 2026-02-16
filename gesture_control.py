@@ -16,6 +16,7 @@ default_config = {
     "THUMB_INDEX_THRESHOLD": 0.07,
     "THUMB_MIDDLE_THRESHOLD": 0.07,
     "THUMB_PINKIE_THRESHOLD": 0.05,
+    "FIST_CURLED_FINGERS_AMOUNT": 3,
     "SNAP_TIME_WINDOW_SECONDS": 1,
     "SENSITIVITY_MULTIPLIER": 1.0,
     "FPS": 20
@@ -32,6 +33,7 @@ THUMB_INDEX_THRESHOLD = config["THUMB_INDEX_THRESHOLD"]
 THUMB_MIDDLE_THRESHOLD = config["THUMB_MIDDLE_THRESHOLD"]
 THUMB_PINKIE_THRESHOLD = config["THUMB_PINKIE_THRESHOLD"]
 SENSITIVITY_MULTIPLIER = config["SENSITIVITY_MULTIPLIER"]
+FIST_CURLED_FINGERS = config["FIST_CURLED_FINGERS_AMOUNT"]
 target_fps = config["FPS"]
 snap_time_window = config["SNAP_TIME_WINDOW_SECONDS"]
 
@@ -107,7 +109,7 @@ def is_fist(hand_landmarks):
         if tip_dist < base_dist * 1.1:  # Small threshold for tolerance
             curled_count += 1
 
-    return curled_count == 4
+    return curled_count >= FIST_CURLED_FINGERS
 
 def press_mouse_button(button='left'):
     """Press and hold mouse button"""
