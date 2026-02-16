@@ -16,6 +16,7 @@ default_config = {
     "THUMB_INDEX_THRESHOLD": 0.07,
     "THUMB_MIDDLE_THRESHOLD": 0.07,
     "THUMB_PINKIE_THRESHOLD": 0.05,
+    "SNAP_TIME_WINDOW_SECONDS": 1,
     "SENSITIVITY_MULTIPLIER": 1.0,
     "FPS": 20
 }
@@ -32,6 +33,7 @@ THUMB_MIDDLE_THRESHOLD = config["THUMB_MIDDLE_THRESHOLD"]
 THUMB_PINKIE_THRESHOLD = config["THUMB_PINKIE_THRESHOLD"]
 SENSITIVITY_MULTIPLIER = config["SENSITIVITY_MULTIPLIER"]
 target_fps = config["FPS"]
+snap_time_window = config["SNAP_TIME_WINDOW_SECONDS"]
 
 print("Creating virtual input devices...")
 
@@ -105,8 +107,7 @@ def is_fist(hand_landmarks):
         if tip_dist < base_dist * 1.1:  # Small threshold for tolerance
             curled_count += 1
 
-    # If at least 3 out of 4 fingers are curled, it's a fist
-    return curled_count >= 3
+    return curled_count == 4
 
 def press_mouse_button(button='left'):
     """Press and hold mouse button"""
@@ -302,7 +303,6 @@ right_button_held = False
 
 # Snap gesture detection state
 last_thumb_middle_touch_time = 0
-snap_time_window = 1  # seconds - window to detect snap transition
 
 # Tracking parameters
 smooth_x, smooth_y = screen_width / 2, screen_height / 2
@@ -496,21 +496,23 @@ try:
             current_time = time.time()
 
             # SNAP GESTURE DETECTION (thumb-middle → thumb-index quickly)
-            # Track thumb-middle touches
-            if thumb_middle_now and not thumb_middle_touching:
-                # Thumb-middle just touched
-                last_thumb_middle_touch_time = current_time
+            # Only detect snap when hand is open (not fist)
+            if not hand_is_fist:
+                # Track thumb-middle touches
+                if thumb_middle_now and not thumb_middle_touching:
+                    # Thumb-middle just touched
+                    last_thumb_middle_touch_time = current_time
 
-            # Detect snap: thumb-index touches within window after thumb-middle
-            if thumb_index_now and not thumb_index_touching:
-                time_since_middle = current_time - last_thumb_middle_touch_time
-                if time_since_middle < snap_time_window and time_since_middle > 0.05:
-                    # SNAP DETECTED!
-                    send_close_window()
-                    last_gesture_detected = 'SNAP - CLOSE'
-                    last_gesture_display_time = current_time
-                    # Reset to prevent re-triggering
-                    last_thumb_middle_touch_time = 0
+                # Detect snap: thumb-index touches within window after thumb-middle
+                if thumb_index_now and not thumb_index_touching:
+                    time_since_middle = current_time - last_thumb_middle_touch_time
+                    if time_since_middle < snap_time_window and time_since_middle > 0.05:
+                        # SNAP DETECTED!
+                        send_close_window()
+                        last_gesture_detected = 'SNAP - CLOSE'
+                        last_gesture_display_time = current_time
+                        # Reset to prevent re-triggering
+                        last_thumb_middle_touch_time = 0
 
             # Click detection based on hand pose
             if not hand_is_fist:
