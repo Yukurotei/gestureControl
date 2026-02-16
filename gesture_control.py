@@ -14,8 +14,10 @@ from collections import deque
 config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
 default_config = {
     "THUMB_INDEX_THRESHOLD": 0.07,
+    "THUMB_MIDDLE_THRESHOLD": 0.07,
     "THUMB_PINKIE_THRESHOLD": 0.05,
-    "SENSITIVITY_MULTIPLIER": 1.0
+    "SENSITIVITY_MULTIPLIER": 1.0,
+    "FPS": 20
 }
 if not os.path.exists(config_path):
     with open(config_path, 'w') as f:
@@ -26,8 +28,10 @@ else:
         config = json.load(f)
 
 THUMB_INDEX_THRESHOLD = config["THUMB_INDEX_THRESHOLD"]
+THUMB_MIDDLE_THRESHOLD = config["THUMB_MIDDLE_THRESHOLD"]
 THUMB_PINKIE_THRESHOLD = config["THUMB_PINKIE_THRESHOLD"]
-SENSITIVITY_MULTIPLIER = config.get("SENSITIVITY_MULTIPLIER", 1.0)
+SENSITIVITY_MULTIPLIER = config["SENSITIVITY_MULTIPLIER"]
+target_fps = config["FPS"]
 
 print("Creating virtual input devices...")
 
@@ -42,7 +46,8 @@ virtual_mouse = UInput(mouse_capabilities, name='gesture-mouse')
 keyboard_capabilities = {
     e.EV_KEY: [
         e.KEY_LEFTCTRL, e.KEY_LEFTMETA,  # Ctrl, Super
-        e.KEY_LEFT, e.KEY_RIGHT, e.KEY_UP, e.KEY_DOWN
+        e.KEY_LEFT, e.KEY_RIGHT, e.KEY_UP, e.KEY_DOWN,
+        e.KEY_Q  # For close window (Super+Q)
     ]
 }
 virtual_keyboard = UInput(keyboard_capabilities, name='gesture-keyboard')
@@ -146,6 +151,22 @@ def send_workspace_switch(direction):
     virtual_keyboard.syn()
 
     print(f"🚀 Workspace switch: {direction}")
+
+def send_close_window():
+    """Send Hyprland close window shortcut: Super+Q"""
+    # Press Super+Q
+    virtual_keyboard.write(e.EV_KEY, e.KEY_LEFTMETA, 1)
+    virtual_keyboard.write(e.EV_KEY, e.KEY_Q, 1)
+    virtual_keyboard.syn()
+
+    time.sleep(0.05)
+
+    # Release all keys
+    virtual_keyboard.write(e.EV_KEY, e.KEY_Q, 0)
+    virtual_keyboard.write(e.EV_KEY, e.KEY_LEFTMETA, 0)
+    virtual_keyboard.syn()
+
+    print(f"💥 SNAP - Close window!")
 
 # Initialize MediaPipe Face Landmarker
 face_base_options = python.BaseOptions(
@@ -274,16 +295,20 @@ gesture_display_duration = 0.8  # seconds to show gesture message
 
 # Click detection state
 thumb_index_touching = False
+thumb_middle_touching = False
 thumb_pinkie_touching = False
 left_button_held = False
 right_button_held = False
+
+# Snap gesture detection state
+last_thumb_middle_touch_time = 0
+snap_time_window = 1  # seconds - window to detect snap transition
 
 # Tracking parameters
 smooth_x, smooth_y = screen_width / 2, screen_height / 2
 smoothing_factor = 0.3
 sensitivity_x = 2.5 * SENSITIVITY_MULTIPLIER
 sensitivity_y = 2.5 * SENSITIVITY_MULTIPLIER
-target_fps = 30
 frame_delay = 1.0 / target_fps
 last_mouse_x, last_mouse_y = screen_width / 2, screen_height / 2
 
@@ -358,7 +383,7 @@ try:
                     px = (int(landmark.x * w), int(landmark.y * h))
                     if idx == 0:  # Wrist - larger circle
                         cv2.circle(debug_frame, px, 8, (0, 255, 255), -1)
-                    elif idx in [4, 8, 20]:  # Thumb, index, pinkie tips - highlight
+                    elif idx in [4, 8, 12, 20]:  # Thumb, index, middle, pinkie tips - highlight
                         cv2.circle(debug_frame, px, 6, (0, 255, 0), -1)
                     else:
                         cv2.circle(debug_frame, px, 4, (255, 100, 100), -1)
@@ -366,31 +391,60 @@ try:
                 # Draw touch indicators
                 thumb_tip = hand_landmarks[4]
                 index_tip = hand_landmarks[8]
+                middle_tip = hand_landmarks[12]
                 pinkie_tip = hand_landmarks[20]
 
                 thumb_px = (int(thumb_tip.x * w), int(thumb_tip.y * h))
                 index_px = (int(index_tip.x * w), int(index_tip.y * h))
+                middle_px = (int(middle_tip.x * w), int(middle_tip.y * h))
                 pinkie_px = (int(pinkie_tip.x * w), int(pinkie_tip.y * h))
 
                 # Calculate distances for debugging
                 thumb_index_dist = ((thumb_tip.x - index_tip.x)**2 +
                                    (thumb_tip.y - index_tip.y)**2 +
                                    (thumb_tip.z - index_tip.z)**2)**0.5
+                thumb_middle_dist = ((thumb_tip.x - middle_tip.x)**2 +
+                                    (thumb_tip.y - middle_tip.y)**2 +
+                                    (thumb_tip.z - middle_tip.z)**2)**0.5
                 thumb_pinkie_dist = ((thumb_tip.x - pinkie_tip.x)**2 +
                                     (thumb_tip.y - pinkie_tip.y)**2 +
                                     (thumb_tip.z - pinkie_tip.z)**2)**0.5
 
                 # Check touches and draw indicators
                 if are_fingers_touching(thumb_tip, index_tip, THUMB_INDEX_THRESHOLD):
-                    cv2.line(debug_frame, thumb_px, index_px, (0, 255, 0), 5)
-                    label = "LEFT HOLDING" if left_button_held else "LEFT CLICK"
-                    cv2.putText(debug_frame, f"{label} ({thumb_index_dist:.3f})",
-                               (index_px[0] + 10, index_px[1] - 10),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    # Check if this hand is a fist for correct label
+                    hand_is_fist_viz = is_fist(hand_landmarks)
+
+                    if hand_is_fist_viz:
+                        # Fist mode: thumb+index = right click
+                        cv2.line(debug_frame, thumb_px, index_px, (255, 0, 255), 5)
+                        label = "RIGHT HOLDING (FIST)" if right_button_held else "RIGHT CLICK (FIST)"
+                        cv2.putText(debug_frame, f"{label} ({thumb_index_dist:.3f})",
+                                   (index_px[0] + 10, index_px[1] - 10),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+                    else:
+                        # Open hand mode: thumb+index = left click
+                        cv2.line(debug_frame, thumb_px, index_px, (0, 255, 0), 5)
+                        label = "LEFT HOLDING" if left_button_held else "LEFT CLICK"
+                        cv2.putText(debug_frame, f"{label} ({thumb_index_dist:.3f})",
+                                   (index_px[0] + 10, index_px[1] - 10),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 else:
                     # Always show thumb-index distance
                     cv2.putText(debug_frame, f"T-I: {thumb_index_dist:.3f} / {THUMB_INDEX_THRESHOLD:.3f}",
                                (index_px[0] + 10, index_px[1] - 10),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
+
+                # Thumb-middle touch indicator (for snap gesture)
+                if are_fingers_touching(thumb_tip, middle_tip, THUMB_MIDDLE_THRESHOLD):
+                    cv2.line(debug_frame, thumb_px, middle_px, (255, 165, 0), 5)  # Orange
+                    cv2.putText(debug_frame, f"SNAP READY ({thumb_middle_dist:.3f})",
+                               (middle_px[0] + 10, middle_px[1] - 10),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 165, 0), 2)
+                else:
+                    # Show thumb-middle distance
+                    cv2.putText(debug_frame, f"T-M: {thumb_middle_dist:.3f} / {THUMB_MIDDLE_THRESHOLD:.3f}",
+                               (middle_px[0] + 10, middle_px[1] - 10),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
 
                 if are_fingers_touching(thumb_tip, pinkie_tip, THUMB_PINKIE_THRESHOLD):
@@ -428,53 +482,78 @@ try:
             # Get finger tips
             thumb_tip = first_hand[4]
             index_tip = first_hand[8]
+            middle_tip = first_hand[12]
             pinkie_tip = first_hand[20]
 
             # Check if hand is in fist pose (check this FIRST)
             hand_is_fist = is_fist(first_hand)
 
-            # Detect finger touches for clicks
+            # Detect finger touches
             thumb_index_now = are_fingers_touching(thumb_tip, index_tip, THUMB_INDEX_THRESHOLD)
+            thumb_middle_now = are_fingers_touching(thumb_tip, middle_tip, THUMB_MIDDLE_THRESHOLD)
             thumb_pinkie_now = are_fingers_touching(thumb_tip, pinkie_tip, THUMB_PINKIE_THRESHOLD)
 
             current_time = time.time()
 
-            # Only allow clicks if hand is OPEN (not fist)
+            # SNAP GESTURE DETECTION (thumb-middle → thumb-index quickly)
+            # Track thumb-middle touches
+            if thumb_middle_now and not thumb_middle_touching:
+                # Thumb-middle just touched
+                last_thumb_middle_touch_time = current_time
+
+            # Detect snap: thumb-index touches within window after thumb-middle
+            if thumb_index_now and not thumb_index_touching:
+                time_since_middle = current_time - last_thumb_middle_touch_time
+                if time_since_middle < snap_time_window and time_since_middle > 0.05:
+                    # SNAP DETECTED!
+                    send_close_window()
+                    last_gesture_detected = 'SNAP - CLOSE'
+                    last_gesture_display_time = current_time
+                    # Reset to prevent re-triggering
+                    last_thumb_middle_touch_time = 0
+
+            # Click detection based on hand pose
             if not hand_is_fist:
-                # Left button: thumb + index (hold while touching)
+                # OPEN HAND MODE
+                # Left button: thumb + index
                 if thumb_index_now and not left_button_held:
-                    # Press button when fingers touch
                     press_mouse_button('left')
                     left_button_held = True
                     last_gesture_detected = 'LEFT CLICK'
                     last_gesture_display_time = current_time
                 elif not thumb_index_now and left_button_held:
-                    # Release button when fingers separate
                     release_mouse_button('left')
                     left_button_held = False
 
-                # Right button: thumb + pinkie (hold while touching)
+                # Right button: thumb + pinkie
                 if thumb_pinkie_now and not right_button_held:
-                    # Press button when fingers touch
                     press_mouse_button('right')
                     right_button_held = True
                     last_gesture_detected = 'RIGHT CLICK'
                     last_gesture_display_time = current_time
                 elif not thumb_pinkie_now and right_button_held:
-                    # Release button when fingers separate
                     release_mouse_button('right')
                     right_button_held = False
             else:
-                # If hand becomes fist, release any held buttons
+                # FIST MODE - thumb+index becomes right click
+                # Release left button if it was held (hand changed to fist)
                 if left_button_held:
                     release_mouse_button('left')
                     left_button_held = False
-                if right_button_held:
+
+                # Right click: thumb + index (when fist)
+                if thumb_index_now and not right_button_held:
+                    press_mouse_button('right')
+                    right_button_held = True
+                    last_gesture_detected = 'RIGHT CLICK (FIST)'
+                    last_gesture_display_time = current_time
+                elif not thumb_index_now and right_button_held:
                     release_mouse_button('right')
                     right_button_held = False
 
             # Update touch states
             thumb_index_touching = thumb_index_now
+            thumb_middle_touching = thumb_middle_now
             thumb_pinkie_touching = thumb_pinkie_now
 
             # Only track position if hand is fist
@@ -542,6 +621,7 @@ try:
             hand_history.clear()
             # Reset touch states when no hand detected
             thumb_index_touching = False
+            thumb_middle_touching = False
             thumb_pinkie_touching = False
             # Release any held buttons when hand disappears
             if left_button_held:
