@@ -17,9 +17,10 @@ default_config = {
     "THUMB_MIDDLE_THRESHOLD": 0.07,
     "THUMB_PINKIE_THRESHOLD": 0.05,
     "FIST_CURLED_FINGERS_AMOUNT": 3,
+    "FIST_THUMB_INDEX_RIGHT_CLICK": True,
     "SNAP_TIME_WINDOW_SECONDS": 1,
     "SENSITIVITY_MULTIPLIER": 1.0,
-    "FPS": 20
+    "FPS": 20,
 }
 if not os.path.exists(config_path):
     with open(config_path, 'w') as f:
@@ -36,6 +37,7 @@ SENSITIVITY_MULTIPLIER = config["SENSITIVITY_MULTIPLIER"]
 FIST_CURLED_FINGERS = config["FIST_CURLED_FINGERS_AMOUNT"]
 target_fps = config["FPS"]
 snap_time_window = config["SNAP_TIME_WINDOW_SECONDS"]
+fist_thumb_index_right_click = config["FIST_THUMB_INDEX_RIGHT_CLICK"]
 
 print("Creating virtual input devices...")
 
@@ -44,7 +46,7 @@ mouse_capabilities = {
     e.EV_REL: [e.REL_X, e.REL_Y],
     e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT],
 }
-virtual_mouse = UInput(mouse_capabilities, name='gesture-mouse')
+virtual_mouse = UInput(mouse_capabilities, name='gesture-mouse') # type: ignore
 
 # Virtual keyboard for shortcuts
 keyboard_capabilities = {
@@ -54,7 +56,7 @@ keyboard_capabilities = {
         e.KEY_Q  # For close window (Super+Q)
     ]
 }
-virtual_keyboard = UInput(keyboard_capabilities, name='gesture-keyboard')
+virtual_keyboard = UInput(keyboard_capabilities, name='gesture-keyboard') # type: ignore
 print("Virtual devices created successfully!")
 
 # Helper functions
@@ -417,13 +419,19 @@ try:
                     # Check if this hand is a fist for correct label
                     hand_is_fist_viz = is_fist(hand_landmarks)
 
-                    if hand_is_fist_viz:
-                        # Fist mode: thumb+index = right click
+                    if hand_is_fist_viz and fist_thumb_index_right_click:
+                        # Fist mode: thumb+index = right click (if enabled)
                         cv2.line(debug_frame, thumb_px, index_px, (255, 0, 255), 5)
                         label = "RIGHT HOLDING (FIST)" if right_button_held else "RIGHT CLICK (FIST)"
                         cv2.putText(debug_frame, f"{label} ({thumb_index_dist:.3f})",
                                    (index_px[0] + 10, index_px[1] - 10),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+                    elif hand_is_fist_viz and not fist_thumb_index_right_click:
+                        # Fist mode but right-click disabled: show inactive indicator
+                        cv2.line(debug_frame, thumb_px, index_px, (100, 100, 100), 3)
+                        cv2.putText(debug_frame, f"TOUCH (FIST - DISABLED) ({thumb_index_dist:.3f})",
+                                   (index_px[0] + 10, index_px[1] - 10),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 2)
                     else:
                         # Open hand mode: thumb+index = left click
                         cv2.line(debug_frame, thumb_px, index_px, (0, 255, 0), 5)
@@ -539,21 +547,22 @@ try:
                     release_mouse_button('right')
                     right_button_held = False
             else:
-                # FIST MODE - thumb+index becomes right click
+                # FIST MODE
                 # Release left button if it was held (hand changed to fist)
                 if left_button_held:
                     release_mouse_button('left')
                     left_button_held = False
 
-                # Right click: thumb + index (when fist)
-                if thumb_index_now and not right_button_held:
-                    press_mouse_button('right')
-                    right_button_held = True
-                    last_gesture_detected = 'RIGHT CLICK (FIST)'
-                    last_gesture_display_time = current_time
-                elif not thumb_index_now and right_button_held:
-                    release_mouse_button('right')
-                    right_button_held = False
+                # Right click: thumb + index (when fist) - only if enabled in config
+                if fist_thumb_index_right_click:
+                    if thumb_index_now and not right_button_held:
+                        press_mouse_button('right')
+                        right_button_held = True
+                        last_gesture_detected = 'RIGHT CLICK (FIST)'
+                        last_gesture_display_time = current_time
+                    elif not thumb_index_now and right_button_held:
+                        release_mouse_button('right')
+                        right_button_held = False
 
             # Update touch states
             thumb_index_touching = thumb_index_now
