@@ -325,8 +325,6 @@ try:
             target_y = (screen_height / 2) + (offset_y * screen_height)
             smooth_x = smooth_x * (1 - smoothing_factor) + target_x * smoothing_factor
             smooth_y = smooth_y * (1 - smoothing_factor) + target_y * smoothing_factor
-            smooth_x = max(10, min(smooth_x, screen_width - 10))
-            smooth_y = max(10, min(smooth_y, screen_height - 10))
             move_mouse_native(smooth_x, smooth_y)
 
             # Draw nose landmark on debug frame
