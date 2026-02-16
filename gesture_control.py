@@ -6,19 +6,26 @@ import time
 import pyautogui
 import numpy as np
 import os
+import json
 from evdev import UInput, ecodes as e
 from collections import deque
 
-# ============ GESTURE SETTINGS ============
-# Adjust these values to tune gesture detection
+# Load config (create with defaults if missing)
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+default_config = {
+    "THUMB_INDEX_THRESHOLD": 0.07,
+    "THUMB_PINKIE_THRESHOLD": 0.05
+}
+if not os.path.exists(config_path):
+    with open(config_path, 'w') as f:
+        json.dump(default_config, f, indent=4)
+    config = default_config
+else:
+    with open(config_path) as f:
+        config = json.load(f)
 
-# FINGER TOUCH THRESHOLDS - Distance for detecting finger touches
-# Lower = fingers must be closer to register as touching
-# Typical range: 0.02 (very close) to 0.08 (farther apart)
-THUMB_INDEX_THRESHOLD = 0.07   # Left click
-THUMB_PINKIE_THRESHOLD = 0.17  # Right click (pinkie is harder to reach)
-
-# =========================================
+THUMB_INDEX_THRESHOLD = config["THUMB_INDEX_THRESHOLD"]
+THUMB_PINKIE_THRESHOLD = config["THUMB_PINKIE_THRESHOLD"]
 
 print("Creating virtual input devices...")
 
