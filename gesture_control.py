@@ -14,7 +14,8 @@ from collections import deque
 config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
 default_config = {
     "THUMB_INDEX_THRESHOLD": 0.07,
-    "THUMB_PINKIE_THRESHOLD": 0.05
+    "THUMB_PINKIE_THRESHOLD": 0.05,
+    "SENSITIVITY_MULTIPLIER": 1.0
 }
 if not os.path.exists(config_path):
     with open(config_path, 'w') as f:
@@ -26,6 +27,7 @@ else:
 
 THUMB_INDEX_THRESHOLD = config["THUMB_INDEX_THRESHOLD"]
 THUMB_PINKIE_THRESHOLD = config["THUMB_PINKIE_THRESHOLD"]
+SENSITIVITY_MULTIPLIER = config.get("SENSITIVITY_MULTIPLIER", 1.0)
 
 print("Creating virtual input devices...")
 
@@ -279,8 +281,8 @@ right_button_held = False
 # Tracking parameters
 smooth_x, smooth_y = screen_width / 2, screen_height / 2
 smoothing_factor = 0.3
-sensitivity_x = 2.5
-sensitivity_y = 2.5
+sensitivity_x = 2.5 * SENSITIVITY_MULTIPLIER
+sensitivity_y = 2.5 * SENSITIVITY_MULTIPLIER
 target_fps = 30
 frame_delay = 1.0 / target_fps
 last_mouse_x, last_mouse_y = screen_width / 2, screen_height / 2
