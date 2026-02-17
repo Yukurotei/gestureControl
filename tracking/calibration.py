@@ -26,7 +26,7 @@ class CalibrationThread(QThread):
 
     def run(self):
         face_base_options = python.BaseOptions(
-            model_asset_path=os.path.expanduser('~/face_landmarker.task')
+            model_asset_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models', 'face_landmarker.task')
         )
         face_options = vision.FaceLandmarkerOptions(
             base_options=face_base_options,
