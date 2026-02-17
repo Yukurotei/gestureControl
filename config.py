@@ -12,6 +12,7 @@ class ConfigManager:
         "SNAP_TIME_WINDOW_SECONDS": 1.0,
         "SENSITIVITY_MULTIPLIER": 1.0,
         "FPS": 20,
+        "SWIPE_VELOCITY_THRESHOLD": 0.5,
     }
 
     DESCRIPTIONS = {
@@ -23,6 +24,7 @@ class ConfigManager:
         "SNAP_TIME_WINDOW_SECONDS": "Max seconds between thumb-middle and thumb-index for snap gesture.",
         "SENSITIVITY_MULTIPLIER": "Head movement sensitivity multiplier. Higher = faster cursor.",
         "FPS": "Target frames per second for the tracking loop.",
+        "SWIPE_VELOCITY_THRESHOLD": "Minimum hand velocity to trigger a workspace switch swipe. Lower = easier to trigger.",
     }
 
     DISPLAY_NAMES = {
@@ -34,6 +36,7 @@ class ConfigManager:
         "SNAP_TIME_WINDOW_SECONDS": "Snap Time Window",
         "SENSITIVITY_MULTIPLIER": "Sensitivity Multiplier",
         "FPS": "FPS",
+        "SWIPE_VELOCITY_THRESHOLD": "Swipe Velocity",
     }
 
     VALUE_RANGES = {
@@ -44,6 +47,7 @@ class ConfigManager:
         "SNAP_TIME_WINDOW_SECONDS": (0.1, 3.0, 0.1),
         "SENSITIVITY_MULTIPLIER": (0.5, 10.0, 0.5),
         "FPS": (5, 120, 5),
+        "SWIPE_VELOCITY_THRESHOLD": (0.1, 2.0, 0.1),
     }
 
     def __init__(self, path=None):

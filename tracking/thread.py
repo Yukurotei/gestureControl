@@ -343,7 +343,7 @@ class TrackingThread(QThread):
                         if time_diff > 0:
                             vx = dx / time_diff
                             vy = dy / time_diff
-                            swipe_threshold = 0.5
+                            swipe_threshold = self._config.get('SWIPE_VELOCITY_THRESHOLD', 0.5)
 
                             wrist_px = (int(wrist.x * w), int(wrist.y * h))
                             vel_end = (int(wrist_px[0] + vx * 50), int(wrist_px[1] + vy * 50))
