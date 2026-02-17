@@ -107,6 +107,8 @@ class ConfigManager:
         return self._config.get(key, self.DEFAULTS.get(key))
 
     def set(self, key, value):
+        if isinstance(value, float):
+            value = round(value, 4)
         self._config[key] = value
 
     def get_all(self):
