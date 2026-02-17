@@ -1,7 +1,7 @@
 from PyQt6.QtCore import pyqtSignal, QTimer
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QDoubleSpinBox, QSpinBox,
-    QCheckBox, QScrollArea, QFrame,
+    QCheckBox, QComboBox, QScrollArea, QFrame,
 )
 
 from config import ConfigManager
@@ -73,6 +73,12 @@ class SettingsPanel(QWidget):
                     widget.setSingleStep(int(step))
                 widget.setValue(int(current))
                 widget.valueChanged.connect(lambda val, k=key: self._on_value_changed(k, val))
+            elif isinstance(default, str) and key in ConfigManager.VALUE_OPTIONS:
+                widget = QComboBox()
+                for option in ConfigManager.VALUE_OPTIONS[key]:
+                    widget.addItem(option)
+                widget.setCurrentText(str(current))
+                widget.currentTextChanged.connect(lambda val, k=key: self._on_value_changed(k, val))
             else:
                 continue
 

@@ -1,8 +1,8 @@
-def are_fingers_touching(landmark1, landmark2, threshold):
+def are_fingers_touching(landmark1, landmark2, threshold, min_threshold=0.0):
     dist = ((landmark1.x - landmark2.x)**2 +
             (landmark1.y - landmark2.y)**2 +
             (landmark1.z - landmark2.z)**2)**0.5
-    return dist < threshold
+    return min_threshold <= dist < threshold
 
 
 def is_fist(hand_landmarks, curled_fingers_required=3):

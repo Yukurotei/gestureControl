@@ -97,6 +97,8 @@ class TrackingThread(QThread):
         left_button_held = False
         right_button_held = False
         last_thumb_middle_touch_time = 0
+        snap_last_touch_dist = None  # thumb-middle distance when last touching
+        snap_release_time = None     # when thumb-middle released
 
         frame_timestamp_ms = 0
 
@@ -109,11 +111,16 @@ class TrackingThread(QThread):
             sensitivity_x = 2.5 * cfg["SENSITIVITY_MULTIPLIER"]
             sensitivity_y = 2.5 * cfg["SENSITIVITY_MULTIPLIER"]
             thumb_index_thresh = cfg["THUMB_INDEX_THRESHOLD"]
+            thumb_index_min = cfg.get("THUMB_INDEX_MIN_THRESHOLD", 0.0)
             thumb_middle_thresh = cfg["THUMB_MIDDLE_THRESHOLD"]
+            thumb_middle_min = cfg.get("THUMB_MIDDLE_MIN_THRESHOLD", 0.0)
             thumb_pinkie_thresh = cfg["THUMB_PINKIE_THRESHOLD"]
+            thumb_pinkie_min = cfg.get("THUMB_PINKIE_MIN_THRESHOLD", 0.0)
             fist_curled_fingers = cfg["FIST_CURLED_FINGERS_AMOUNT"]
             fist_right_click = cfg["FIST_THUMB_INDEX_RIGHT_CLICK"]
             snap_time_window = cfg["SNAP_TIME_WINDOW_SECONDS"]
+            snap_distance_threshold = cfg.get("SNAP_DISTANCE_THRESHOLD", 0.15)
+            snap_mode = cfg.get("SNAP_MODE", "thumb")
             frame_delay = 1.0 / target_fps
 
             ret, frame = cap.read()
@@ -190,7 +197,7 @@ class TrackingThread(QThread):
                     thumb_middle_dist = finger_distance(thumb_tip, middle_tip)
                     thumb_pinkie_dist = finger_distance(thumb_tip, pinkie_tip)
 
-                    if are_fingers_touching(thumb_tip, index_tip, thumb_index_thresh):
+                    if are_fingers_touching(thumb_tip, index_tip, thumb_index_thresh, thumb_index_min):
                         hand_is_fist_viz = is_fist(hand_landmarks, fist_curled_fingers)
                         if hand_is_fist_viz and fist_right_click:
                             cv2.line(debug_frame, thumb_px, index_px, (255, 0, 255), 5)
@@ -214,7 +221,7 @@ class TrackingThread(QThread):
                                    (index_px[0] + 10, index_px[1] - 10),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
 
-                    if are_fingers_touching(thumb_tip, middle_tip, thumb_middle_thresh):
+                    if are_fingers_touching(thumb_tip, middle_tip, thumb_middle_thresh, thumb_middle_min):
                         cv2.line(debug_frame, thumb_px, middle_px, (255, 165, 0), 5)
                         cv2.putText(debug_frame, f"SNAP READY ({thumb_middle_dist:.3f})",
                                    (middle_px[0] + 10, middle_px[1] - 10),
@@ -224,7 +231,7 @@ class TrackingThread(QThread):
                                    (middle_px[0] + 10, middle_px[1] - 10),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
 
-                    if are_fingers_touching(thumb_tip, pinkie_tip, thumb_pinkie_thresh):
+                    if are_fingers_touching(thumb_tip, pinkie_tip, thumb_pinkie_thresh, thumb_pinkie_min):
                         cv2.line(debug_frame, thumb_px, pinkie_px, (255, 0, 255), 5)
                         label = "RIGHT HOLDING" if right_button_held else "RIGHT CLICK"
                         cv2.putText(debug_frame, f"{label} ({thumb_pinkie_dist:.3f})",
@@ -234,6 +241,16 @@ class TrackingThread(QThread):
                         cv2.putText(debug_frame, f"T-P: {thumb_pinkie_dist:.3f} / {thumb_pinkie_thresh:.3f}",
                                    (pinkie_px[0] + 10, pinkie_px[1] - 10),
                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
+
+                    # Palm debug
+                    palm_px = (int(hand_landmarks[0].x * w), int(hand_landmarks[0].y * h))
+                    palm_mid_dist = finger_distance(middle_tip, hand_landmarks[0])
+                    cv2.circle(debug_frame, palm_px, 8, (0, 200, 200), -1)
+                    cv2.putText(debug_frame, f"Palm-M: {palm_mid_dist:.3f}",
+                               (palm_px[0] + 10, palm_px[1] + 20),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 200), 1)
+                    if snap_release_time is not None:
+                        cv2.line(debug_frame, palm_px, middle_px, (0, 255, 255), 2)
 
                     # Handedness label
                     if hand_results.handedness and hand_idx < len(hand_results.handedness):
@@ -251,6 +268,7 @@ class TrackingThread(QThread):
                 # Use first detected hand for gestures
                 first_hand = hand_results.hand_landmarks[0]
                 wrist = first_hand[0]
+                palm_center = first_hand[0]  # wrist
                 thumb_tip = first_hand[4]
                 index_tip = first_hand[8]
                 middle_tip = first_hand[12]
@@ -259,23 +277,45 @@ class TrackingThread(QThread):
                 hand_is_fist = is_fist(first_hand, fist_curled_fingers)
                 is_fist_status = hand_is_fist
 
-                thumb_index_now = are_fingers_touching(thumb_tip, index_tip, thumb_index_thresh)
-                thumb_middle_now = are_fingers_touching(thumb_tip, middle_tip, thumb_middle_thresh)
-                thumb_pinkie_now = are_fingers_touching(thumb_tip, pinkie_tip, thumb_pinkie_thresh)
+                thumb_index_now = are_fingers_touching(thumb_tip, index_tip, thumb_index_thresh, thumb_index_min)
+                thumb_middle_now = are_fingers_touching(thumb_tip, middle_tip, thumb_middle_thresh, thumb_middle_min)
+                thumb_pinkie_now = are_fingers_touching(thumb_tip, pinkie_tip, thumb_pinkie_thresh, thumb_pinkie_min)
 
                 current_time = time.time()
 
+                # Palm distance (middle tip to palm center)
+                palm_middle_dist = finger_distance(middle_tip, palm_center)
+                palm_px = (int(palm_center.x * w), int(palm_center.y * h))
+
                 # Snap gesture (only when open hand)
                 if not hand_is_fist:
-                    if thumb_middle_now and not thumb_middle_touching:
-                        last_thumb_middle_touch_time = current_time
-                    if thumb_index_now and not thumb_index_touching:
-                        time_since_middle = current_time - last_thumb_middle_touch_time
-                        if time_since_middle < snap_time_window and time_since_middle > 0.05:
-                            self.device_manager.send_close_window()
-                            last_gesture_detected = 'SNAP - CLOSE'
-                            last_gesture_display_time = current_time
-                            last_thumb_middle_touch_time = 0
+                    if thumb_middle_now:
+                        # While holding, store reference distance
+                        if snap_mode == "palm":
+                            snap_last_touch_dist = palm_middle_dist
+                        else:
+                            snap_last_touch_dist = thumb_middle_dist
+                        snap_release_time = None
+                    elif thumb_middle_touching and not thumb_middle_now:
+                        # Just released — start timer
+                        snap_release_time = current_time
+
+                    # Check snap after release + timer
+                    if snap_release_time is not None and snap_last_touch_dist is not None:
+                        elapsed = current_time - snap_release_time
+                        if elapsed >= snap_time_window:
+                            if snap_mode == "palm":
+                                # Palm mode: middle finger must get CLOSER to palm
+                                dist_diff = snap_last_touch_dist - palm_middle_dist
+                            else:
+                                # Thumb mode: middle finger must get FARTHER from thumb
+                                dist_diff = thumb_middle_dist - snap_last_touch_dist
+                            if dist_diff >= snap_distance_threshold:
+                                self.device_manager.send_close_window()
+                                last_gesture_detected = 'SNAP - CLOSE'
+                                last_gesture_display_time = current_time
+                            snap_release_time = None
+                            snap_last_touch_dist = None
 
                 # Click detection
                 if not hand_is_fist:
