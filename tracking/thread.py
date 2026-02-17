@@ -47,7 +47,7 @@ class TrackingThread(QThread):
 
         # Load MediaPipe models
         face_base_options = python.BaseOptions(
-            model_asset_path=os.path.expanduser('~/face_landmarker.task')
+            model_asset_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models', 'face_landmarker.task')
         )
         face_options = vision.FaceLandmarkerOptions(
             base_options=face_base_options,
@@ -58,7 +58,7 @@ class TrackingThread(QThread):
         face_landmarker = vision.FaceLandmarker.create_from_options(face_options)
 
         hand_base_options = python.BaseOptions(
-            model_asset_path=os.path.expanduser('~/hand_landmarker.task')
+            model_asset_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models', 'hand_landmarker.task')
         )
         hand_options = vision.HandLandmarkerOptions(
             base_options=hand_base_options,
@@ -294,7 +294,7 @@ class TrackingThread(QThread):
                         if snap_mode == "palm":
                             snap_last_touch_dist = palm_middle_dist
                         else:
-                            snap_last_touch_dist = thumb_middle_dist
+                            snap_last_touch_dist = thumb_middle_dist # type: ignore
                         snap_release_time = None
                     elif thumb_middle_touching and not thumb_middle_now:
                         # Just released — start timer
@@ -309,7 +309,7 @@ class TrackingThread(QThread):
                                 dist_diff = snap_last_touch_dist - palm_middle_dist
                             else:
                                 # Thumb mode: middle finger must get FARTHER from thumb
-                                dist_diff = thumb_middle_dist - snap_last_touch_dist
+                                dist_diff = thumb_middle_dist - snap_last_touch_dist # type: ignore
                             if dist_diff >= snap_distance_threshold:
                                 self.device_manager.send_close_window()
                                 last_gesture_detected = 'SNAP - CLOSE'
