@@ -97,6 +97,10 @@ class TrackingThread(QThread):
         snap_last_touch_dist = None  # thumb-middle distance when last touching
         snap_release_time = None     # when thumb-middle released
 
+        # Scroll state
+        prev_wrist_y = None
+        scroll_accumulator = 0.0
+
         frame_timestamp_ms = 0
 
         while self._running:
@@ -118,6 +122,7 @@ class TrackingThread(QThread):
             snap_time_window = cfg["SNAP_TIME_WINDOW_SECONDS"]
             snap_distance_threshold = cfg.get("SNAP_DISTANCE_THRESHOLD", 0.15)
             snap_mode = cfg.get("SNAP_MODE", "thumb")
+            scroll_sensitivity = cfg.get("SCROLL_SENSITIVITY", 5.0)
             frame_delay = 1.0 / target_fps
 
             ret, frame = cap.read()
@@ -352,11 +357,25 @@ class TrackingThread(QThread):
                 thumb_middle_touching = thumb_middle_now
                 thumb_pinkie_touching = thumb_pinkie_now
 
-                # Swipe tracking (fist only)
+                # Fist tracking (swipe + scroll)
                 if hand_is_fist:
                     hand_history.append((wrist.x, wrist.y, current_time))
+
+                    # Continuous scroll: track frame-to-frame vertical movement
+                    if prev_wrist_y is not None:
+                        dy_scroll = (wrist.y - prev_wrist_y) * scroll_sensitivity * 3
+                        scroll_accumulator += dy_scroll
+                        # Send scroll ticks when accumulated enough
+                        ticks = int(scroll_accumulator)
+                        if ticks != 0:
+                            # Negative because moving hand down = scroll down = negative REL_WHEEL
+                            self.device_manager.scroll(-ticks)
+                            scroll_accumulator -= ticks
+                    prev_wrist_y = wrist.y
                 else:
                     hand_history.clear()
+                    prev_wrist_y = None
+                    scroll_accumulator = 0.0
 
                 # Draw motion trail
                 if len(hand_history) > 1:
@@ -402,6 +421,8 @@ class TrackingThread(QThread):
                                 hand_history.clear()
             else:
                 hand_history.clear()
+                prev_wrist_y = None
+                scroll_accumulator = 0.0
                 thumb_index_touching = False
                 thumb_middle_touching = False
                 thumb_pinkie_touching = False

@@ -11,7 +11,7 @@ class VirtualDeviceManager:
 
     def create_devices(self):
         mouse_capabilities = {
-            e.EV_REL: [e.REL_X, e.REL_Y],
+            e.EV_REL: [e.REL_X, e.REL_Y, e.REL_WHEEL],
             e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT],
         }
         self.virtual_mouse = UInput(mouse_capabilities, name='gesture-mouse')
@@ -58,6 +58,12 @@ class VirtualDeviceManager:
             return
         button_code = e.BTN_LEFT if button == 'left' else e.BTN_RIGHT
         self.virtual_mouse.write(e.EV_KEY, button_code, 0)
+        self.virtual_mouse.syn()
+
+    def scroll(self, amount):
+        if not self.virtual_mouse or amount == 0:
+            return
+        self.virtual_mouse.write(e.EV_REL, e.REL_WHEEL, amount)
         self.virtual_mouse.syn()
 
     def send_workspace_switch(self, direction):

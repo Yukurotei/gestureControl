@@ -18,6 +18,7 @@ class ConfigManager:
         "SENSITIVITY_MULTIPLIER": 1.0,
         "FPS": 20,
         "SWIPE_VELOCITY_THRESHOLD": 0.5,
+        "SCROLL_SENSITIVITY": 5.0,
     }
 
     DESCRIPTIONS = {
@@ -35,6 +36,7 @@ class ConfigManager:
         "SENSITIVITY_MULTIPLIER": "Head movement sensitivity multiplier. Higher = faster cursor.",
         "FPS": "Target frames per second for the tracking loop.",
         "SWIPE_VELOCITY_THRESHOLD": "Minimum hand velocity to trigger a workspace switch swipe. Lower = easier to trigger.",
+        "SCROLL_SENSITIVITY": "Scroll speed when moving fist vertically. Higher = faster scrolling.",
     }
 
     DISPLAY_NAMES = {
@@ -52,6 +54,7 @@ class ConfigManager:
         "SENSITIVITY_MULTIPLIER": "Sensitivity Multiplier",
         "FPS": "FPS",
         "SWIPE_VELOCITY_THRESHOLD": "Swipe Velocity",
+        "SCROLL_SENSITIVITY": "Scroll Sensitivity",
     }
 
     VALUE_RANGES = {
@@ -67,6 +70,7 @@ class ConfigManager:
         "SENSITIVITY_MULTIPLIER": (0.5, 10.0, 0.5),
         "FPS": (5, 120, 5),
         "SWIPE_VELOCITY_THRESHOLD": (0.1, 2.0, 0.1),
+        "SCROLL_SENSITIVITY": (1.0, 20.0, 1.0),
     }
 
     VALUE_OPTIONS = {
