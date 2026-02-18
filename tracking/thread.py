@@ -91,12 +91,9 @@ class TrackingThread(QThread):
         gesture_display_duration = 0.8
 
         # Click state
-        thumb_index_touching = False
         thumb_middle_touching = False
-        thumb_pinkie_touching = False
         left_button_held = False
         right_button_held = False
-        last_thumb_middle_touch_time = 0
         snap_last_touch_dist = None  # thumb-middle distance when last touching
         snap_release_time = None     # when thumb-middle released
 
