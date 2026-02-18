@@ -1,0 +1,6 @@
+mediapipe
+opencv-contrib-python
+numpy
+PyQt6
+pyautogui
+evdev

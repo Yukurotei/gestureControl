@@ -1,3 +1,4 @@
+import sys
 import subprocess
 import re
 import glob as globmod
@@ -26,6 +27,12 @@ TRACKING = "tracking"
 
 
 def enumerate_cameras():
+    if sys.platform == 'win32':
+        return _enumerate_cameras_windows()
+    return _enumerate_cameras_linux()
+
+
+def _enumerate_cameras_linux():
     cameras = []
     try:
         result = subprocess.run(
@@ -61,6 +68,17 @@ def enumerate_cameras():
                     cameras.append({"index": index, "name": f"Camera {index} ({device_path})"})
                     cap.release()
 
+    return cameras
+
+
+def _enumerate_cameras_windows():
+    cameras = []
+    for index in range(10):
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        if cap.isOpened():
+            name = cap.getBackendName()
+            cameras.append({"index": index, "name": f"Camera {index}" if not name else f"{name} ({index})"})
+            cap.release()
     return cameras
 
 
