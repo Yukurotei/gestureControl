@@ -58,20 +58,36 @@ class CalibrationThread(QThread):
             results = face_landmarker.detect_for_video(mp_image, frame_timestamp_ms)
             frame_timestamp_ms += 33
 
+            h, w = frame.shape[:2]
             if results.face_landmarks:
                 nose = results.face_landmarks[0][1]
                 calibration_samples.append((nose.x, nose.y))
 
-                # Draw nose on frame
-                h, w = frame.shape[:2]
-                nose_px = (int(nose.x * w), int(nose.y * h))
-                cv2.circle(frame, nose_px, 8, (0, 255, 0), -1)
-                cv2.putText(frame, "NOSE DETECTED", (nose_px[0] + 10, nose_px[1]),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                # Reticle: dot + ring + gapped crosshair (cyan)
+                _C = (255, 212, 0)   # cyan in BGR
+                nx, ny = int(nose.x * w), int(nose.y * h)
+                cv2.circle(frame, (nx, ny), 3, _C, -1, cv2.LINE_AA)
+                cv2.circle(frame, (nx, ny), 9, _C,  1, cv2.LINE_AA)
+                g = 5
+                cv2.line(frame, (nx-16, ny), (nx-g, ny), _C, 1, cv2.LINE_AA)
+                cv2.line(frame, (nx+g,  ny), (nx+16,ny), _C, 1, cv2.LINE_AA)
+                cv2.line(frame, (nx, ny-16), (nx, ny-g), _C, 1, cv2.LINE_AA)
+                cv2.line(frame, (nx, ny+g),  (nx, ny+16),_C, 1, cv2.LINE_AA)
+                # Small label
+                cv2.putText(frame, f"LOCKED  {len(calibration_samples)}/{self.num_frames}",
+                            (nx+14, ny-2), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.40, (0, 0, 0), 2, cv2.LINE_AA)
+                cv2.putText(frame, f"LOCKED  {len(calibration_samples)}/{self.num_frames}",
+                            (nx+14, ny-2), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.40, _C, 1, cv2.LINE_AA)
             else:
-                h, w = frame.shape[:2]
-                cv2.putText(frame, "NO FACE DETECTED", (w // 2 - 100, h // 2),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                msg = "NO FACE DETECTED"
+                (tw, th), _ = cv2.getTextSize(msg, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
+                tx, ty = (w - tw) // 2, h // 2
+                cv2.putText(frame, msg, (tx+1, ty+1),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,0,0), 2, cv2.LINE_AA)
+                cv2.putText(frame, msg, (tx, ty),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (85, 34, 255), 1, cv2.LINE_AA)
 
             self.frame_ready.emit(frame)
             self.progress.emit(i + 1, self.num_frames)
